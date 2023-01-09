@@ -11,16 +11,12 @@ import plotly.express as px
 from plotly.offline import plot
 from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn import svm
-from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
-from sklearn.ensemble import GradientBoostingClassifier
 from sklearn import tree
 from sklearn import linear_model
 from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import classification_report
 
 data = pd.read_csv("fraud.csv")
 
@@ -56,38 +52,57 @@ print(correlation["isFraud"].sort_values(ascending=False))
 #Based on the corrlation, drop features with below 0.01
 #Additionally, Step is dropped since it only represent a unit of time
 #Normalising the data
-x = data[["type", "amount", "oldbalanceOrg"]]
-y = data[["isFraud"]]
+features = ["type", "amount", "oldbalanceOrg"]
+x = data[features].copy()
+y = data["isFraud"]
+
 
 min_max_scaler = preprocessing.MinMaxScaler()
 dummy1 = x.to_numpy() #returns a numpy array
 scaled = min_max_scaler.fit_transform(dummy1)
 x = pd.DataFrame(scaled)
 
+
 #splitting data for validation
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.20, random_state=77)
 
 def find_Best_Classifier(x_train, x_test, y_train, y_test):
     rand=77
-    names = ['LinearRegression','DecisionTree','NaiveBayes','RandomForest','MLP','GradientBossting','SVM']
+    names = ['LogisticRegression','DecisionTree','NaiveBayes']
     classifiers = [
-                    Pipeline([('LinearRegression', linear_model.LinearRegression())
+                    Pipeline([('LogisticRegression', linear_model.LogisticRegression(random_state=rand))
                               ]),
-                    Pipeline([('DecisionTree', tree.DecisionTreeClassifier())
+                    Pipeline([('DecisionTree', tree.DecisionTreeClassifier(random_state=rand))
                               ]),
                     Pipeline([('NaiveBayes', GaussianNB())
                               ])
                    ]
     i=0
     for name, clf in zip(names, classifiers):
-        
-        clf.fit(x_train, y_train.values.ravel())
+        clf.fit(x_train, y_train)
         score = clf.score(x_test, y_test)
         print(names[i],round(score*100,2))                 
         i+=1
     return 
 
 
-
-#Since 
+#Logistic Regression, Decision Tree and Naive Bayes based on speed, and it gives a high accuracy. So other algorithms no need to consider here.
 find_Best_Classifier(x_train, x_test, y_train, y_test)
+
+#We found out DecisionTree gives the best result, now uses GridSearch to find the appropriate hyperparameters
+BaseTree =  tree.DecisionTreeClassifier(random_state=77)
+param_grid = { 
+    'criterion': ['gini', 'entropy', 'log_loss'],
+    'splitter': ['best', 'random'],
+    'min_samples_split': [2,3,4],
+    'min_samples_leaf': [1,2,3],
+}
+grid = GridSearchCV(BaseTree, param_grid, n_jobs=-1, cv=5, scoring = 'accuracy')
+grid.fit(x_train, y_train)
+print('Best hyperparameters:',grid.best_params_)
+grid_predictions = grid.predict(x_test)
+target_names = ['Not Fraud', 'Fraud']
+print(classification_report(y_test, grid_predictions, target_names = target_names)) 
+
+score = grid.score(x_test, y_test)
+print(round(score*100,2))     
